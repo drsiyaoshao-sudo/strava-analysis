@@ -18,6 +18,7 @@ def main():
     parser = argparse.ArgumentParser(description="Strava Fitness Analyzer")
     parser.add_argument("--html",   action="store_true", help="Generate HTML dashboard")
     parser.add_argument("--chat",   action="store_true", help="Interactive goal assessment")
+    parser.add_argument("--export", action="store_true", help="Export 90-day aligned series to CSV")
     parser.add_argument("--months", type=int, default=12, help="Months of history (default 12)")
     args = parser.parse_args()
 
@@ -31,6 +32,7 @@ def main():
     from strava.report       import print_report
     from strava.dashboard    import generate_html
     from strava.interact     import run_chat
+    from strava.export_data  import export_csv
 
     token      = get_token()
     athlete    = fetch_athlete(token)
@@ -48,6 +50,8 @@ def main():
     elif args.chat:
         print_report(data, athlete)
         run_chat(data, athlete)
+    elif args.export:
+        export_csv(data, athlete)
     else:
         print_report(data, athlete)
 

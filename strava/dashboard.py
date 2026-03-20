@@ -85,6 +85,7 @@ code{background:#1e2235;padding:2px 6px;border-radius:4px;font-size:.8rem}
     <div class="mr"><span class="mk">ATL &nbsp;fatigue</span><span class="mv" id="fv-atl"></span></div>
     <div class="mr"><span class="mk">TSB &nbsp;form</span><span class="mv bold" id="fv-tsb"></span></div>
     <div class="mr"><span class="mk">CTL &Delta; 6&thinsp;wk</span><span class="mv" id="fv-delta"></span></div>
+    <div class="mr"><span class="mk">ACWR &nbsp;injury risk</span><span class="mv" id="fv-acwr"></span></div>
     <p id="form-msg" style="font-size:.75rem;color:var(--muted);margin-top:10px;line-height:1.4"></p>
   </div>
   <div class="card s4"><div class="ct">Training Load &middot; CTL / ATL / TSB &middot; last 90 days</div><div style="position:relative;height:200px"><canvas id="ch-load"></canvas></div></div>
@@ -100,6 +101,7 @@ code{background:#1e2235;padding:2px 6px;border-radius:4px;font-size:.8rem}
   <div class="card s2" id="card-ha-out"><div class="ct">Outliers (last 90 days, IQR)</div><div id="ha-outliers"></div></div>
   <div class="card s4" id="card-ha-dist"><div class="ct">Metric Distributions (90 days)</div><div id="ha-dist" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px"></div></div>
   <div class="card s4" id="card-ha-col"><div class="ct">Stress Collision Events</div><div id="ha-collide"></div></div>
+  <div class="card s4" id="card-race"><div class="ct">Race Time Predictions &middot; Riegel Formula</div><div id="race-cont"></div></div>
   <div class="card s4" id="card-benchmarks"><div class="ct">Benchmarks &amp; Sport Readiness</div><div id="benchmarks-cont"></div></div>
   <div class="card s4"><div class="ct">Verdict</div><div id="verdict-cont"></div></div>
 </div>
@@ -136,6 +138,12 @@ document.getElementById('fv-tsb').innerHTML=`<span class="${tsbC}">${sgn(ld.tsb)
 const dc=ld.ctl_delta>2?'green':ld.ctl_delta<-2?'yellow':'dim';
 document.getElementById('fv-delta').innerHTML=`<span class="${dc}">${sgn(ld.ctl_delta)}${ld.ctl_delta.toFixed(1)}</span>`;
 document.getElementById('form-msg').textContent=ld.form_msg;
+if(ld.acwr!=null){
+  const rc={under:'#60a5fa',optimal:'#22c55e',caution:'#f59e0b',high:'#ef4444'};
+  const rl={under:'Undertraining',optimal:'Optimal',caution:'Caution',high:'High Risk'};
+  const col=rc[ld.acwr_risk]||'#64748b';
+  document.getElementById('fv-acwr').innerHTML=`<span style="color:${col};font-weight:700">${ld.acwr.toFixed(2)}</span>&ensp;<span style="font-size:.72rem;color:${col}">${rl[ld.acwr_risk]||''}</span>`;
+}
 
 Chart.defaults.color='#64748b';
 Chart.defaults.borderColor='#1e2235';
@@ -395,6 +403,27 @@ if(D.swimming){
 })();
 
 (function(){
+  const rp=D.race_predictions;const el=document.getElementById('card-race');
+  if(!rp||!rp.predictions||!Object.keys(rp.predictions).length){if(el)el.style.display='none';return;}
+  const cont=document.getElementById('race-cont');
+  const tbl=document.createElement('table');tbl.className='ht';tbl.style.width='100%';
+  tbl.innerHTML='<thead><tr><th>Distance</th><th style="text-align:right">Time</th><th style="text-align:right">Pace</th><th>Source</th></tr></thead><tbody></tbody>';
+  const body=tbl.querySelector('tbody');
+  Object.entries(rp.predictions).forEach(([name,p])=>{
+    const tr=document.createElement('tr');
+    const srcStyle='color:var(--muted);font-size:.75rem';
+    const src=p.is_actual?'<span style="color:#22c55e;font-size:.72rem">actual effort on file</span>':`projected from ${p.ref_name} <span style="color:var(--muted)">(${p.ref_date})</span>${p.ratio_warning?'&ensp;<span style="color:#f59e0b;font-size:.7rem">⚠ low confidence</span>':''}`;
+    const tw=p.is_actual?'font-weight:700;color:var(--text)':'color:var(--text)';
+    tr.innerHTML=`<td><strong>${name}</strong></td><td style="text-align:right;${tw}">${p.time_str}</td><td style="text-align:right;color:var(--muted)">${p.pace_str}</td><td>${src}</td>`;
+    body.appendChild(tr);
+  });
+  cont.appendChild(tbl);
+  const note=document.createElement('p');note.style.cssText='font-size:.72rem;color:var(--muted);margin-top:10px';
+  note.textContent='Riegel 1981: T₂ = T₁ × (D₂/D₁)^1.06 — accuracy best within 3× reference distance';
+  cont.appendChild(note);
+})();
+
+(function(){
   const bm=D.benchmarks;const sr=D.sport_recs;const cont=document.getElementById('benchmarks-cont');
   const ratingColor={Excellent:'#22c55e',Athlete:'#22c55e',Good:'#22c55e','Above Average':'#60a5fa',Average:'#f59e0b','Below Average':'#f59e0b',Poor:'#ef4444','Very Poor':'#ef4444',Fair:'#f59e0b'};
   let html='<div style="display:grid;grid-template-columns:1fr 2fr;gap:24px">';
@@ -451,11 +480,12 @@ def generate_html(data: dict, athlete: dict, output_path: str = "dashboard.html"
         "cycling":         data["cycling"],
         "swimming":        data["swimming"],
         "consistency":     data["consistency"],
-        "apple_health":    data["apple_health"],
-        "health_analysis": data.get("health_analysis"),
-        "benchmarks":      data.get("benchmarks", {}),
-        "sport_recs":      data.get("sport_recs", []),
-        "verdict":         data["verdict"],
+        "apple_health":      data["apple_health"],
+        "health_analysis":   data.get("health_analysis"),
+        "race_predictions":  data.get("race_predictions"),
+        "benchmarks":        data.get("benchmarks", {}),
+        "sport_recs":        data.get("sport_recs", []),
+        "verdict":           data["verdict"],
     }
     html = _HTML.replace("__CHART_DATA__", json.dumps(payload, default=lambda x: None))
     with open(output_path, "w") as f:

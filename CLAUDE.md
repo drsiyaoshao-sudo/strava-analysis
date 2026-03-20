@@ -23,7 +23,9 @@ strava/
   health_parse.py   ← Apple Health XML/zip → structured dicts
   health_analysis.py← cross-analysis: correlations, outliers, histograms, collisions
   benchmarks.py     ← population norms, sport profiles, goal evaluation
-  compute.py        ← master analyze() pipeline — calls health_analysis + benchmarks
+  race_predict.py   ← Riegel race time predictions, best-effort extraction
+  export_data.py    ← CSV export of 90-day aligned series
+  compute.py        ← master analyze() pipeline — calls all sub-modules
   report.py         ← Rich terminal output
   dashboard.py      ← self-contained HTML (Chart.js 4.4, no external deps at runtime)
   interact.py       ← --chat REPL, keyword intent parsing
@@ -49,7 +51,58 @@ atl = rolling_avg(daily_trimp, 7)    # Acute Training Load  — fatigue
 tsb = ctl - atl                      # Training Stress Balance — form
 ```
 
-Form status thresholds:
+### ACWR — Acute:Chronic Workload Ratio (Gabbett 2016)
+Stored in `data["load"]["acwr"]` and `data["load"]["acwr_risk"]`.
+
+```python
+acwr = current_atl / current_ctl   # ATL ÷ CTL
+
+# Risk bands:
+# < 0.8   → "under"   (undertraining)
+# 0.8–1.3 → "optimal" (sweet spot)
+# 1.3–1.5 → "caution" (workload spike)
+# > 1.5   → "high"    (critical injury risk — generates verdict flag)
+```
+
+### HRV Daily Readiness
+Stored in `data["apple_health"]["hrv_readiness"]` (integer %).
+
+```python
+hrv_readiness = round(hrv_7d_avg / hrv_60d_baseline * 100)
+
+# Thresholds:
+# ≥ 95% → Ready (green)
+# 80–94% → Reduced (yellow)
+# < 80%  → Low — consider rest (red)
+```
+
+### Race Time Predictions — Riegel Formula
+Implemented in `strava/race_predict.py`.
+
+```python
+T2 = T1 × (D2 / D1) ^ 1.06     # Riegel 1981
+
+# Reference: Peter Riegel, "Athletic Records and Human Endurance", American Scientist 1981
+# Accuracy note: degrades when ratio D2/D1 > 4× (flagged as ratio_warning=True)
+```
+
+Distance bins for best-effort matching (activity distance must fall within):
+- 5K: 4500–5800 m
+- 10K: 9000–11000 m
+- Half Marathon: 19000–22500 m
+- Marathon: 40000–44000 m
+
+`data["race_predictions"]` keys: `best_efforts`, `predictions`
+Each prediction has: `time_str`, `pace_str`, `ref_name`, `ref_date`, `is_actual`, `ratio_warning`
+
+### CSV Export
+`python analyze.py --export` → `strava_analysis.csv`
+
+Columns: `date, ctl, atl, tsb, acwr, rhr, hrv, hrv_readiness, sleep_h, sleep_score, deep_pct, rem_pct, km_trained`
+
+Falls back to load-series only (no health columns) if Apple Health data is absent.
+
+### Form status thresholds:
 - TSB > 10   → FRESH (good to race)
 - TSB > -10  → NEUTRAL
 - TSB > -25  → TIRED
@@ -205,18 +258,21 @@ fetch_athlete()     ──┤
                       ├─→ compute.analyze() ──→ data dict
 load_apple_health() ──┘        │
                                ├─→ health_analysis.cross_analyze()
+                               ├─→ race_predict.predict_races()
                                ├─→ benchmarks.assess_athlete()
                                └─→ benchmarks.sport_recommendations()
 
-data dict ──→ report.print_report()    (terminal)
+data dict ──→ report.print_report()     (terminal)
           ──→ dashboard.generate_html() (HTML file)
-          ──→ interact.run_chat()       (REPL reads data, calls benchmarks)
+          ──→ interact.run_chat()        (REPL reads data, calls benchmarks)
+          ──→ export_data.export_csv()   (--export flag)
 ```
 
 `data` dict keys:
-`overview`, `weekly`, `load`, `load_series`, `hr`, `zones`,
+`overview`, `weekly`, `load` (includes `acwr`, `acwr_risk`), `load_series`, `hr`, `zones`,
 `running`, `cycling`, `swimming`, `consistency`,
-`apple_health`, `health_analysis`, `benchmarks`, `sport_recs`, `verdict`
+`apple_health` (includes `hrv_readiness`), `health_analysis`,
+`race_predictions`, `benchmarks`, `sport_recs`, `verdict`
 
 ---
 
@@ -254,6 +310,16 @@ Special commands (checked before sport matching):
 - **Token file name** `strava_token.json` — hardcoded in auth.py, excluded from git.
 
 ---
+
+## CLI Reference
+
+```
+python analyze.py              # Rich terminal report
+python analyze.py --html       # Generate + open dashboard.html
+python analyze.py --chat       # Interactive goal assessment REPL
+python analyze.py --export     # Export 90-day series to strava_analysis.csv
+python analyze.py --months 6   # Limit to last N months (default 12)
+```
 
 ## When Adding New Features
 

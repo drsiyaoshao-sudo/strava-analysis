@@ -134,6 +134,17 @@ def print_report(data: dict, athlete: dict) -> None:
     cd_label = "building" if cd > 2 else ("declining" if cd < -2 else "flat")
     load_table.add_row("CTL change (6 weeks)", f"[{cd_style}]{cd:+.1f}  ({cd_label})[/{cd_style}]")
 
+    if ld.get("acwr") is not None:
+        acwr_colors = {"under": "blue", "optimal": "green", "caution": "yellow", "high": "bold red"}
+        acwr_labels = {"under": "Undertraining (<0.8)", "optimal": "Optimal (0.8–1.3)",
+                       "caution": "Caution (1.3–1.5)", "high": "HIGH RISK (>1.5)"}
+        ar = ld["acwr_risk"]
+        load_table.add_row("", "")
+        load_table.add_row(
+            "ACWR  (ATL ÷ CTL)",
+            f"[{acwr_colors.get(ar, 'dim')}]{ld['acwr']:.2f}  {acwr_labels.get(ar, '')}[/{acwr_colors.get(ar, 'dim')}]",
+        )
+
     console.print(Panel(
         load_table,
         title="[bold cyan]TRAINING LOAD  ·  CTL / ATL / TSB[/bold cyan]",
@@ -326,6 +337,12 @@ def print_report(data: dict, athlete: dict) -> None:
                 hrv_extra = "  ⚠ declining"
             ah_table.add_row("HRV SDNN  (last 30d)", f"[{hrv_s}]{ah['hrv_recent']:.0f} ms{hrv_extra}[/{hrv_s}]")
 
+        if ah.get("hrv_readiness") is not None:
+            rp      = ah["hrv_readiness"]
+            rp_s    = "green" if rp >= 95 else ("yellow" if rp >= 80 else "red")
+            rp_lbl  = "Ready" if rp >= 95 else ("Reduced" if rp >= 80 else "Low — consider rest")
+            ah_table.add_row("HRV Readiness  (7d vs 60d base)", f"[{rp_s}]{rp}%  {rp_lbl}[/{rp_s}]")
+
         if ah["vo2max"]:
             ah_table.add_row("VO2max  (Apple Watch est.)", f"{ah['vo2max']:.1f} mL/kg/min")
 
@@ -373,6 +390,31 @@ def print_report(data: dict, athlete: dict) -> None:
                 style="dim",
             ),
             title="[dim]APPLE HEALTH[/dim]",
+            box=rbox.ROUNDED, padding=(0, 1),
+        ))
+        console.print()
+
+    # ── Race Predictions ──────────────────────────────────────────────────────
+    rp = data.get("race_predictions")
+    if rp and rp.get("predictions"):
+        rp_table = Table(box=rbox.SIMPLE_HEAD, padding=(0, 1), header_style="bold cyan")
+        rp_table.add_column("Distance",  style="bold white", width=16)
+        rp_table.add_column("Time",      justify="right",    width=10)
+        rp_table.add_column("Pace",      justify="right",    width=10)
+        rp_table.add_column("Source",    style="dim")
+
+        for name, p in rp["predictions"].items():
+            t_style = "bold bright_white" if p["is_actual"] else "white"
+            src     = "actual effort" if p["is_actual"] else f"projected from {p['ref_name']} ({p['ref_date']})"
+            warn    = "  ⚠ low confidence" if p["ratio_warning"] else ""
+            rp_table.add_row(name, f"[{t_style}]{p['time_str']}[/{t_style}]",
+                             p["pace_str"], f"{src}{warn}")
+
+        footer = Text("\n  Formula: T₂ = T₁ × (D₂/D₁)^1.06  ·  Riegel 1981  ·  "
+                      "Bold = actual effort on file", style="dim")
+        console.print(Panel(
+            Group(rp_table, footer),
+            title="[bold cyan]RACE TIME PREDICTIONS[/bold cyan]",
             box=rbox.ROUNDED, padding=(0, 1),
         ))
         console.print()

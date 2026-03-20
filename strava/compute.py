@@ -7,6 +7,7 @@ from collections import defaultdict
 from .utils import km, hms, pace, linear_trend, trimp, rolling_avg
 from . import health_analysis
 from . import benchmarks
+from . import race_predict
 
 
 def analyze(activities: list[dict], athlete: dict, health: dict | None = None) -> dict:
@@ -98,10 +99,20 @@ def analyze(activities: list[dict], athlete: dict, health: dict | None = None) -
         form_status, form_label = "overreached","OVERREACHED"
         form_msg = "You are digging a hole — rest now"
 
+    # ACWR — Acute:Chronic Workload Ratio (Gabbett 2016)
+    # < 0.8 undertraining · 0.8–1.3 optimal · 1.3–1.5 caution · > 1.5 high injury risk
+    acwr = round(current_atl / current_ctl, 2) if current_ctl > 0 else None
+    if   acwr is None:      acwr_risk = "unknown"
+    elif acwr < 0.8:        acwr_risk = "under"
+    elif acwr <= 1.3:       acwr_risk = "optimal"
+    elif acwr <= 1.5:       acwr_risk = "caution"
+    else:                   acwr_risk = "high"
+
     data["load"] = {
         "ctl": current_ctl, "atl": current_atl, "tsb": current_tsb,
         "form_status": form_status, "form_label": form_label, "form_msg": form_msg,
         "ctl_delta": ctl_delta,
+        "acwr": acwr, "acwr_risk": acwr_risk,
     }
 
     n90 = min(90, len(ctl_series))
@@ -303,6 +314,12 @@ def analyze(activities: list[dict], athlete: dict, health: dict | None = None) -
         vo2max_vals = [v.get("vo2max") for v in daily_h.values() if v.get("vo2max")]
         weight_vals = [v.get("weight") for v in daily_h.values() if v.get("weight")]
 
+        # HRV Readiness: 7-day avg vs 60-day personal baseline
+        # > 95% = Ready · 80–95% = Reduced · < 80% = Low
+        hrv_7d       = avg_metric(daily_h, "hrv", 0, 7)
+        hrv_60d_base = avg_metric(daily_h, "hrv", 0, 60)
+        hrv_readiness = round(hrv_7d / hrv_60d_base * 100) if (hrv_7d and hrv_60d_base) else None
+
         def _sleep_avg(key, n=30):
             vals = [
                 sleep_h[(now - timedelta(days=d)).strftime("%Y-%m-%d")][key]
@@ -321,6 +338,7 @@ def analyze(activities: list[dict], athlete: dict, health: dict | None = None) -
         data["apple_health"] = {
             "rhr_recent":    rhr_recent,   "rhr_prior":    rhr_prior,
             "hrv_recent":    hrv_recent,   "hrv_prior":    hrv_prior,
+            "hrv_readiness": hrv_readiness,
             "vo2max":        max(vo2max_vals) if vo2max_vals else None,
             "weight_recent": avg_metric(daily_h, "weight", 0, 14),
             "weight_prior":  avg_metric(daily_h, "weight", 30, 60),
@@ -356,6 +374,9 @@ def analyze(activities: list[dict], athlete: dict, health: dict | None = None) -
         data["apple_health"]   = None
         data["health_analysis"] = None
 
+    # ── Race Predictions (Riegel formula) ─────────────────────────────────────
+    data["race_predictions"] = race_predict.predict_races(runs) if runs else None
+
     # ── Benchmarks & sport recommendations ────────────────────────────────────
     data["benchmarks"]  = benchmarks.assess_athlete(data)
     data["sport_recs"]  = benchmarks.sport_recommendations(data)[:5]
@@ -372,6 +393,10 @@ def analyze(activities: list[dict], athlete: dict, health: dict | None = None) -
         flags.append(("warning", "GREY ZONE TRAP: Too much moderate-intensity work. Easy days easy, hard days hard"))
     if current_tsb < -25:
         flags.append(("critical", "OVERREACHED: TSB critically negative. Rest now"))
+    if acwr is not None and acwr > 1.5:
+        flags.append(("critical", f"INJURY RISK: ACWR {acwr:.2f} — acute load is {acwr:.1f}× your chronic base. Back off now"))
+    elif acwr is not None and acwr > 1.3:
+        flags.append(("warning", f"ACWR CAUTION: {acwr:.2f} — workload spike detected. Monitor closely"))
     if current_tsb > 15 and current_ctl < 30:
         flags.append(("warning", "LOW FITNESS BASE: Fresh but not fit — need more accumulated work"))
     if ctl_delta < -5:
