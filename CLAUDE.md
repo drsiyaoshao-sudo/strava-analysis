@@ -421,6 +421,10 @@ These were proposed by Claude and not yet actioned. Add a date and move to Pendi
 
 **[ ] Periodization planner** — given current CTL, target sport, race date → generate week-by-week CTL target curve using sport profile min_ctl as the peak.
 
+**[ ] Setup wizard** — `python setup.py` interactive flow: walks through Strava OAuth, locates Apple Health export, writes a config file. No source code editing required. Removes the credential-in-source-code barrier for non-technical users.
+
+**[ ] Web UI / local server** — simple Flask dev server serving the dashboard locally with live data refresh. Removes the CLI barrier entirely. Prerequisite: setup wizard should land first.
+
 ---
 
 ### How to add a new request
