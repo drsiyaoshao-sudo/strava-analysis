@@ -1,0 +1,26 @@
+# Strava token (contains access credentials)
+strava_token.json
+
+# Apple Health export (large personal data file)
+export.zip
+export.xml
+apple_health_export/
+
+# Generated output
+dashboard.html
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.egg
+
+# macOS
+.DS_Store
