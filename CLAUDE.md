@@ -321,6 +321,123 @@ python analyze.py --export     # Export 90-day series to strava_analysis.csv
 python analyze.py --months 6   # Limit to last N months (default 12)
 ```
 
+---
+
+## Feature Request Log
+
+Tracks the owner's prompts in their own words. When building something new, check here first for context and intent. Mark completed items `[x]`, in-progress `[~]`, pending `[ ]`.
+
+---
+
+### Completed
+
+**[x] Beautify the analysis results**
+> "Beautify the analysis results"
+
+Rebuilt terminal output using `rich` — panels, colored metrics, progress bars, badge-style status indicators.
+
+---
+
+**[x] Apple Health integration**
+> "Also consider adding my apple health data"
+
+Parses `export.zip` / `export.xml`. Extracts resting HR, HRV, VO2max, weight, and full sleep stage breakdown (Deep, REM, Core, Awake). Per-night sleep score 0–100.
+
+---
+
+**[x] HTML dashboard**
+> "Can you generate an HTML based dashboard for me to check data and trend"
+
+Self-contained `dashboard.html` via `--html`. Chart.js 4.4, dark theme. All charts embedded inline — no server needed, no external runtime dependencies.
+
+---
+
+**[x] Health × Strava cross-analysis**
+> "Add Apple Health measurement, identify trend colliding with Strava and find outlier and distribution"
+
+14 Pearson correlations, IQR outlier detection on RHR / HRV / sleep / sleep score, 12-bin histograms, stress collision event detector (3+ signals coinciding).
+
+---
+
+**[x] Sleep score in analysis**
+> "Make sure the sleep analysis data like its score is in the analysis"
+
+Sleep score (0–100) propagated through terminal report, HTML dashboard, cross-analysis correlations, outlier detection, and histograms.
+
+---
+
+**[x] Benchmarks + interactive goal chat**
+> "Next step is to parse articles from JAMA, Men's Health, Runner's World to put the data and trend into general public and verdict what kind of sports I need to test next"
+> "I also want some interaction like: I want to do xxx, can you give me a verdict with this idea"
+
+Built population norms from published sources (ACSM, AHA, Shaffer & Ginsberg) rather than scraping articles. 10 sport profiles from 5K to Ironman with gap analysis and readiness scores. `--chat` REPL with keyword intent parsing.
+
+---
+
+**[x] Refactor**
+> "Also refactor the code, it is huge and unreadable"
+
+Split 1835-line monolithic `analyze.py` into `strava/` package with 13 focused modules. Each module owns one domain. Thin entry point with argparse.
+
+---
+
+**[x] ACWR injury risk, HRV readiness, race predictions, CSV export**
+> "Build what you will actually do first" (following: ACWR, export CSV, race predictor, HRV readiness score)
+
+- ACWR: ATL/CTL with Gabbett 2016 injury bands, verdict flags at >1.3 and >1.5
+- HRV readiness: 7-day vs personal 60-day baseline, shown as %
+- Race predictor: Riegel formula T₂ = T₁ × (D₂/D₁)^1.06, auto-detects best efforts
+- CSV export: `--export` → `strava_analysis.csv` with all aligned training + health columns
+
+---
+
+### Pending / Partially done
+
+**[ ] Article parsing from fitness publications**
+> "Parse articles from JAMA, Men's Health, Runner's World to put the data and trend into general public"
+
+The benchmarks module uses published norms directly from source papers. What's NOT done: scraping/parsing live articles, extracting study findings programmatically, or mapping article claims to the user's personal metrics with citations. If implementing: store parsed findings in `strava/articles.py` as structured dicts (metric, threshold, source, url), surface them in the `--chat` REPL when discussing a goal.
+
+---
+
+**[ ] Time series / pattern recognition for other domains**
+> "I'm thinking of using data science or pattern recognition to analyze some of my trend curves. So I can reuse a lot of ideas from this app in other time series analysis such as stock market"
+
+CSV export (`--export`) was added as the enabling step. The architecture discussion established: CTL/ATL/TSB ≡ slow/fast EMA / MACD; IQR outliers transfer cleanly; collision events transfer if signals are independent. Key caution: fitness correlations have physiological ground truth; market correlations are regime-dependent and adversarial. A separate repo is the right call — don't pollute this one with market logic.
+
+---
+
+### Suggested backlog (not yet requested)
+
+These were proposed by Claude and not yet actioned. Add a date and move to Pending when you decide to build one.
+
+**[ ] Periodization detector** — sliding window over weekly CTL to identify base / build / peak / taper / recovery blocks. Flag if in a build block > 6 weeks without a step-back week.
+
+**[ ] Recovery curve projector** — forward-simulate TSB assuming zero training for 14 days. Answer: "when will I be fresh?"
+
+**[ ] Personal Best tracker** — fastest average-pace efforts by distance bracket with CTL/TSB context at the time of each PR.
+
+**[ ] Garmin Connect integration** — `garminconnect` Python library. Unlocks running dynamics (vertical oscillation, GCT, stride ratio), overnight HRV, power for cycling. `health_parse.py` architecture absorbs it cleanly.
+
+**[ ] Periodization planner** — given current CTL, target sport, race date → generate week-by-week CTL target curve using sport profile min_ctl as the peak.
+
+---
+
+### How to add a new request
+
+When you ask Claude to build something new, paste your prompt here under **Pending** with a date:
+
+```
+**[ ] <feature name>** — <date>
+> "your exact words"
+
+<one sentence on intent>
+```
+
+Claude will move it to Completed with implementation notes when done.
+
+---
+
 ## When Adding New Features
 
 1. **New metric from Apple Health** → add to `QUANTITIES` dict in `health_parse.py`, then propagate through `compute.py` enrichment section and add to `data["apple_health"]`
