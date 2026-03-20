@@ -10,6 +10,12 @@ Project guidelines for Claude Code. Read this before making any changes.
 
 **Opinionated and honest.** Don't soften findings. If someone is overreaching, say "OVERREACHED". If their sleep is poor, say "Poor". Use graded labels (Excellent / Good / Average / Below Average / Poor) backed by published sources.
 
+**Raw data always, proprietary scores never.** Every fitness wearable sells a high-order "score" — Whoop's Recovery Score, Oura's Readiness Score, Garmin's Body Battery, Fitbit's Daily Readiness. These are black-box models trained on their own user populations, tuned for retention and marketing, and not reproducible. We extract the raw physiological signals (HRV in ms, RHR in bpm, sleep stage durations, skin temperature delta) and apply our own formulas grounded in published research. This is the entire point.
+
+When adding a new data source:
+- ✓ Extract: raw HRV (ms), raw RHR (bpm), sleep stage durations (min), temperature deviation (°C), SpO2 (%)
+- ✗ Never import: Recovery Score, Readiness Score, Body Battery, Strain Score, Sleep Score from the vendor — these are their IP, not science
+
 ---
 
 ## Package Structure
@@ -420,6 +426,36 @@ These were proposed by Claude and not yet actioned. Add a date and move to Pendi
 **[ ] Garmin Connect integration** — `garminconnect` Python library. Unlocks running dynamics (vertical oscillation, GCT, stride ratio), overnight HRV, power for cycling. `health_parse.py` architecture absorbs it cleanly.
 
 **[ ] Periodization planner** — given current CTL, target sport, race date → generate week-by-week CTL target curve using sport profile min_ctl as the peak.
+
+**[ ] Garmin Connect integration**
+Library: `garminconnect` (Python, unofficial but stable).
+Raw data to extract: running dynamics (vertical oscillation, ground contact time, stride ratio), overnight HRV, sleep stages, VO2max estimate, training history.
+Skip entirely: Body Battery, Training Readiness Score, Training Load Focus, Performance Condition — all proprietary Garmin models.
+Priority: high. Garmin is the dominant device among serious runners and triathletes who are the core users.
+
+**[ ] Whoop integration**
+API: unofficial (`whoop-python` or direct REST).
+Raw data to extract: overnight HRV (5-min intervals → compute RMSSD), RHR, sleep stages (SWS / REM / Light / Awake durations), respiratory rate, skin temperature.
+Skip entirely: Recovery Score (0–100%), Strain Score, Sleep Performance % — Whoop's proprietary black boxes, tuned for engagement not physiology.
+Note: Whoop's marketing leans heavily on Recovery Score. Their raw HRV and sleep stage data is what's actually valuable.
+
+**[ ] Oura Ring integration**
+API: official Oura REST v2 (personal access token, free tier available).
+Raw data to extract: overnight HRV (RMSSD), RHR, skin temperature deviation from baseline (°C), sleep stage durations, respiratory rate, SpO2.
+Skip entirely: Readiness Score, Sleep Score, Activity Score — all Oura proprietary composites.
+Note: Oura temperature deviation is uniquely useful — it's a leading indicator of illness and menstrual cycle phase that no other consumer device surfaces as well.
+
+**[ ] Polar integration**
+API: Accesslink API (OAuth2, official).
+Raw data to extract: nightly HRV (RMSSD from orthostatic test), sleep staging, training session HR data.
+Skip entirely: Recovery Pro score, Nightly Recharge — Polar proprietary.
+Note: Polar's orthostatic test (lying → standing HR delta) is a validated readiness protocol worth surfacing if the user does it.
+
+**[ ] Withings integration**
+API: official Health Mate API (OAuth2).
+Raw data to extract: body weight, body fat %, muscle mass, blood pressure, resting HR from smart scale, sleep stages from Sleep Analyzer mat.
+Skip entirely: their Wellness Score.
+Note: Withings scale body composition is the best consumer-grade weight + fat % data. Useful for tracking body composition alongside training load.
 
 **[ ] Setup wizard** — `python setup.py` interactive flow: walks through Strava OAuth, locates Apple Health export, writes a config file. No source code editing required. Removes the credential-in-source-code barrier for non-technical users.
 
